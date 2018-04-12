@@ -3,18 +3,18 @@
 ### Please contact us on [github with any issues](https://github.com/BD2KGenomics/toil-vg/issues/new)
 [vg](https://github.com/vgteam/vg) is a toolkit for DNA sequence analysis using variation graphs.  Toil-vg is a [toil](https://github.com/BD2KGenomics/toil)-based framework for running common vg pipelines at scale, either locally or on a distributed computing environment.
 
-The pipeline runs the mapping and surjection of the VG graph alignment process intended for use on the NIH Biowulf cluster. It is mainly written to workaround the temporary incompatibility of the toil-based Toil-vg pipeline with the Slurm batch system that the NIH HPC systems use.
+This pipeline runs the mapping and surjection implementation of the VG graph alignment process intended for use on the NIH Biowulf cluster. It is mainly written to workaround the temporary incompatibility of the toil-based Toil-vg pipeline with the Slurm batch system that the NIH HPC systems use.
 This package is only for use on NIH Biowulf systems. Further information on how to run various jobs on Biowulf instances can be found [here](https://hpc.nih.gov/).
 
 ## Basic Installation
 
 First download the github repo
     
-    git clone https://github.com/vgteam/toil-vg.git
+    git clone https://github.com/vgteam/vg_biowulf.git
     
 Next add the bash scripts to your `PATH` environment variable
 
-    export PATH=$PATH:toil-vg/scripts/vg_workaround_pipeline_pkg
+    export PATH=$PATH:vg_biowulf/vg_workaround_pipeline_pkg
     
 ## Basic WGS runs on an individual sample
 
