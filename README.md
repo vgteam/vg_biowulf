@@ -26,7 +26,7 @@ To run an individual sample in this pipeline, you will first need to collect:
 
 To execute the pipeline, run the following command:
 
-    sample_master_script.sh -i ${SAMPLE_NAME} -r ${INPUT_READ_FILE_1} -r ${INPUT_READ_FILE_2} -g ${GRAPH_FILES_DIR_PATH} -w ${WORK_DIR} -c ${VG_CONTAINER} > ${WORK_DIR}/master_script.stdout
+    sample_master_script.sh -i ${SAMPLE_NAME} -r ${INPUT_READ_FILE_1} -r ${INPUT_READ_FILE_2} -g ${GRAPH_FILES_DIR_PATH} -w ${WORK_DIR} -c ${VG_CONTAINER} -m ${VG_ALGORITHM} -s ${READS_PER_CHUNK} > ${WORK_DIR}/master_script.stdout
     
 ### An example run of a wgs sample
     
@@ -37,13 +37,16 @@ To execute the pipeline, run the following command:
     GRAPH_FILES_DIR_PATH="/data/markellocj/graph_reference/snp1kg_256-HS37D5"
     WORK_DIR="/data/Udpbinfo/usr/markellocj/${COHORT_NAME}_run/output_${SAMPLE_NAME}_vg_t148"
     VG_CONTAINER="v1.6.0-939-g9fa94410-t149-run"
+    VG_ALGORITHM="vg_map"
+    READS_PER_CHUNK=10000000
     mkdir -p ${WORK_DIR} && cd ${WORK_DIR}
-    sample_master_script.sh -i ${SAMPLE_NAME} -r ${INPUT_READ_FILE_1} -r ${INPUT_READ_FILE_2} -g ${GRAPH_FILES_DIR_PATH} -w ${WORK_DIR} -c ${VG_CONTAINER} > ${WORK_DIR}/master_script.stdout
+    sbatch --cpus-per-task=32 --mem=120g --time=4:00:00 ample_master_script.sh -i ${SAMPLE_NAME} -r ${INPUT_READ_FILE_1} -r ${INPUT_READ_FILE_2} -g ${GRAPH_FILES_DIR_PATH} -w ${WORK_DIR} -c ${VG_CONTAINER} -m ${VG_ALGORITHM} -s ${READS_PER_CHUNK} > ${WORK_DIR}/master_script.stdout
     
 ### Things to keep in mind. Basic job maintenance
 
 Running a pipeline this large can be unstable due to the amount of data and the number of swarm jobs it executes. It's best to keep track of your running jobs by periodically running the following monitoring tools:
 - `squeue -u ${USERNAME}` OR `jobload -u ${USERNAME}`: Gives a list of currently running slurm jobs on the system along with JOBID's and current resource use for each job.
+- `squeue -u $USER -o "%.8A %.4C %.10m %.20E"`: Gives a more detailed list of currently running slurm jobs which includes dependency information.
 - `jobhist ${JOBID}`: Gives specific execution time and success status of previously execulted jobs.
 - `checkquota -u ${USERNAME}`: Gives total disk quota provided and disk useage for the user.
 

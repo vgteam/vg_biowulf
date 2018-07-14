@@ -45,11 +45,13 @@ if [ $# -lt 5 ] || [[ $@ != -* ]]; then
     exit 1
 fi
 
-PACKAGE_DIR="/data/markellocj/vg_workaround_pipeline_pkg"
+PACKAGE_DIR="/data/markellocj/vg_workaround_pipeline_pkg_cleanup"
 
 VG_CONTAINER="quay.io/vgteam/vg:v1.6.0-187-ga5bc5549-t124-run"
+READS_PER_CHUNK=10000000
+
 ## Parse through arguments
-while getopts "i:r:g:w:c:h" OPTION; do
+while getopts "i:r:g:w:c:m:s:h" OPTION; do
     case $OPTION in
         i)
             SAMPLE_NAME=$OPTARG
@@ -65,6 +67,12 @@ while getopts "i:r:g:w:c:h" OPTION; do
         ;;
         c)
             VG_CONTAINER=$OPTARG
+        ;;
+        m)
+            MAP_ALGORITHM=$OPTARG
+        ;;
+        s)
+            READS_PER_CHUNK=$OPTARG
         ;;
         h)
             usage
@@ -93,21 +101,52 @@ if [ ! -d "${WORK_DIR}" ]; then
     chmod 2770 ${WORK_DIR}
 fi
 
-echo "Generating swarm script for splitting reads."
-${PACKAGE_DIR}/generate_split_reads_swarm_script.sh ${INPUT_READ_FILE_1} ${INPUT_READ_FILE_2} ${SAMPLE_NAME} ${WORK_DIR} ${VG_CONTAINER}
-echo "Finished generating swarm script for splitting reads."
+echo "Splitting reads files into chunks of ${READS_PER_CHUNK} reads."
+${PACKAGE_DIR}/run_split_reads.sh ${INPUT_READ_FILE_1} ${INPUT_READ_FILE_2} ${SAMPLE_NAME} ${WORK_DIR} ${VG_CONTAINER} ${READS_PER_CHUNK}
+echo "Finished splitting reads."
 
-SPLIT_READS_SWARMFILE_PATH="${WORK_DIR}/split_fastq_swarmfile_${SAMPLE_NAME}"
-SPLIT_READS_JOBID=$(swarm -f ${SPLIT_READS_SWARMFILE_PATH} -g 100 -t 32 --time=2:00:00)
-echo "Splitting reads into chunks. Jobid: ${SPLIT_READS_JOBID}"
 
-## STEP2: GENERATE SWARM SCRIPTS. Generate the swarm scripts used for running the chunk alignment,
-##        chromosome split, and indexing chromosomal gams procedures.
-GENERATE_SWARM_JOBID=$(sbatch --time=1:00:00 --dependency=afterok:${SPLIT_READS_JOBID} ${PACKAGE_DIR}/generate_vg_map_pipeline_swarm_scripts.sh ${SAMPLE_NAME} ${WORK_DIR} ${GRAPH_FILES_DIR} ${VG_CONTAINER} ${PACKAGE_DIR})
-echo "Generating swarm scripts for alignment pipeline. Jobid:${GENERATE_SWARM_JOBID}"
+## RUN EITHER VG MAP OR VG MPMAP ALGORITHM PIPELINES.
+if [ "$MAP_ALGORITHM" = "vg_mpmap" ]; then
+    ## STEP2: GENERATE SURJECT SWARM FILES. Generate swarm script to run vg surject on each chunked GAM into final BAM files.
+    ${PACKAGE_DIR}/generate_vg_mpmap_pipeline_swarm_scripts.sh ${SAMPLE_NAME} ${WORK_DIR} ${GRAPH_FILES_DIR} ${VG_CONTAINER} ${PACKAGE_DIR}
+    MAP_SWARMFILE_NAME="${WORK_DIR}/map_swarmfile_${SAMPLE_NAME}"
+    SURJECT_GAMS_SWARMFILE_NAME="${WORK_DIR}/surject_gams_swarmfile_${SAMPLE_NAME}"    
+    PROCESS_BAMS_SWARMFILE_NAME="${WORK_DIR}/process_bams_swarmfile_${SAMPLE_NAME}"   
+    echo "Generated swarm scripts for vg mpmap alignment pipeline."
+ 
+    ## STEP3: CHUNK ALIGNMENT and RUN SURJECTION.
+    CHUNK_ALIGNMENT_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 120 -t 32 --time 8:00:00 --maxrunning 15)
+    echo "Running swarm VG mpmap graph alignment. Jobid:${CHUNK_ALIGNMENT_JOBID}"
 
-## STEPS 3-7 (CHUNK ALIGNMENT, INDEX GAMs, and CHROMOSOME SPLIT, MERGE GAMs, SURJECT) are run within STEP2 to workaround
-##        pipeline dependencies for dynamically generated swarm scripts.
+    SURJECT_GAMS_JOBID=$(swarm -f ${SURJECT_GAMS_SWARMFILE_NAME} --dependency=afterok:${CHUNK_ALIGNMENT_JOBID} -g 100 -t 32 --time 12:00:00)
+    echo "Running surject swarm script. Jobid:${SURJECT_GAMS_JOBID}"
+
+else
+    ## STEP2: GENERATE SURJECT SWARM FILES. Generate swarm script to run vg map on each fastq chunk and process the final BAM files.
+    ${PACKAGE_DIR}/generate_vg_map_pipeline_swarm_scripts.sh ${SAMPLE_NAME} ${WORK_DIR} ${GRAPH_FILES_DIR} ${VG_CONTAINER} ${PACKAGE_DIR}
+    MAP_SWARMFILE_NAME="${WORK_DIR}/map_swarmfile_${SAMPLE_NAME}"
+    PROCESS_BAMS_SWARMFILE_NAME="${WORK_DIR}/process_bams_swarmfile_${SAMPLE_NAME}"
+    echo "Generated swarm scripts for vg map alignment pipeline."
+    
+    ## STEP3: CHUNK ALIGNMENT WITH VG SURJECTION.
+    SURJECT_GAMS_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 100 -t 32 --time 8:00:00 --maxrunning 15)
+    echo "Running swarm VG map graph alignment. Jobid:${CHUNK_ALIGNMENT_JOBID}"
+
+fi
+    
+## STEP4: SORT, MARKDUPLICATES and REORDER BAMs.
+PROCESS_BAMS_JOBID=$(swarm -f ${PROCESS_BAMS_SWARMFILE_NAME} --dependency=afterok:${SURJECT_GAMS_JOBID} -g 100 -t 32 --time 12:00:00 --maxrunning 20)
+echo "Running process BAMs swarm script. Jobid:${PROCESS_BAMS_JOBID}"
+
+## STEP5: MERGE BAM FILES.
+MERGE_BAMS_JOBID=$(sbatch --cpus-per-task=32 --mem=100g --time=12:00:00 --dependency=afterok:${PROCESS_BAMS_JOBID} ${PACKAGE_DIR}/run_merge_processed_bam_script.sh ${SAMPLE_NAME} ${WORK_DIR})
+echo "Running merge of final BAMs. Jobid:${MERGE_BAMS_JOBID}"
+
+## STEP6: CLEAN UP WORK DIRECTORY.
+CLEAN_WORKDIR_JOBID=$(sbatch --time=1:00:00 --dependency=afterok:${MERGE_BAMS_JOBID} ${PACKAGE_DIR}/run_workdir_cleanup.sh ${SAMPLE_NAME} ${WORK_DIR} ${PACKAGE_DIR})
+echo "Running work directory cleanup script. Jobid:${CLEAN_WORKDIR_JOBID}"
+
 
 exit
 

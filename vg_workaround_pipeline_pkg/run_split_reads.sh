@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Split reads
-# Assumes that source ead files are located in the same directory
 
 # Resource recommendation for running this script
 #   sbatch --cpus-per-task=32 --mem=200g --time=30:00:00
@@ -16,6 +15,7 @@ INPUT_READ_FILE_2=$2
 SAMPLE_NAME=$3
 WORK_DIR=$4
 VG_CONTAINER=$5
+READS_PER_CHUNK=$6
 FASTQ_SPLIT_SWARMFILE_NAME="${WORK_DIR}/split_fastq_swarmfile_${SAMPLE_NAME}"
 FASTQ_WORKDIR_PATH="${WORK_DIR}/split_fastqs_${SAMPLE_NAME}"
 
@@ -27,10 +27,16 @@ if [ ! -d "$FASTQ_WORKDIR_PATH" ]; then
     chmod 2770 $FASTQ_WORKDIR_PATH
 fi
 
-READS_PER_CHUNK=10000000
-let CHUNK_LINES=$READS_PER_CHUNK*4
+let CHUNK_LINES=${READS_PER_CHUNK}*4
 
-echo "module load singularity; cd ${FASTQ_WORKDIR_PATH}; gzip -cd ${INPUT_READ_FILE_1} | SINGULARITYENV_CHUNK_LINES=${CHUNK_LINES} singularity exec -H ${FASTQ_WORKDIR_PATH}:${HOME} --pwd ${HOME} docker://${VG_CONTAINER} split -l ${CHUNK_LINES} --filter='pigz -p 32 > \$FILE.fq.gz' - ${HOME}/fq_chunk_1.part." >> ${FASTQ_SPLIT_SWARMFILE_NAME}
+module load singularity
+cd ${FASTQ_WORKDIR_PATH}
+gzip -cd ${INPUT_READ_FILE_1} | SINGULARITYENV_CHUNK_LINES=${CHUNK_LINES} singularity exec -H ${FASTQ_WORKDIR_PATH}:${HOME} --pwd ${HOME} docker://${VG_CONTAINER} split -l ${CHUNK_LINES} --filter='pigz -p 32 > ${FILE}.fq.gz' - ${HOME}/fq_chunk_1.part. &
+pids[1]=$!
+gzip -cd ${INPUT_READ_FILE_2} | SINGULARITYENV_CHUNK_LINES=${CHUNK_LINES} singularity exec -H ${FASTQ_WORKDIR_PATH}:${HOME} --pwd ${HOME} docker://${VG_CONTAINER} split -l ${CHUNK_LINES} --filter='pigz -p 32 > ${FILE}.fq.gz' - ${HOME}/fq_chunk_2.part. &
+pids[2]=$!
 
-echo "module load singularity; cd ${FASTQ_WORKDIR_PATH}; gzip -cd ${INPUT_READ_FILE_2} | SINGULARITYENV_CHUNK_LINES=${CHUNK_LINES} singularity exec -H ${FASTQ_WORKDIR_PATH}:${HOME} --pwd ${HOME} docker://${VG_CONTAINER} split -l ${CHUNK_LINES} --filter='pigz -p 32 > \$FILE.fq.gz' - ${HOME}/fq_chunk_2.part." >> ${FASTQ_SPLIT_SWARMFILE_NAME}
+for pid in ${pids[*]}; do
+    wait $pid
+done
 
