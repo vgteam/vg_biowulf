@@ -40,7 +40,7 @@ To execute the pipeline, run the following command:
     VG_ALGORITHM="vg_map"
     READS_PER_CHUNK=10000000
     mkdir -p ${WORK_DIR} && cd ${WORK_DIR}
-    sbatch --cpus-per-task=32 --mem=120g --time=4:00:00 ample_master_script.sh -i ${SAMPLE_NAME} -r ${INPUT_READ_FILE_1} -r ${INPUT_READ_FILE_2} -g ${GRAPH_FILES_DIR_PATH} -w ${WORK_DIR} -c ${VG_CONTAINER} -m ${VG_ALGORITHM} -s ${READS_PER_CHUNK} > ${WORK_DIR}/master_script.stdout
+    sbatch --cpus-per-task=32 --mem=120g --time=4:00:00 sample_master_script.sh -i ${SAMPLE_NAME} -r ${INPUT_READ_FILE_1} -r ${INPUT_READ_FILE_2} -g ${GRAPH_FILES_DIR_PATH} -w ${WORK_DIR} -c ${VG_CONTAINER} -m ${VG_ALGORITHM} -s ${READS_PER_CHUNK} > ${WORK_DIR}/master_script.stdout
     
 ### Things to keep in mind. Basic job maintenance
 
