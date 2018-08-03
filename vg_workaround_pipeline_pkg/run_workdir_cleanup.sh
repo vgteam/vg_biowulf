@@ -27,6 +27,8 @@ rm -f ${SPLIT_FASTQ_SWARMFILE_NAME} ${INDEX_GAMS_SWARMFILE_NAME} ${MAP_SWARMFILE
 cd ${WORK_DIR}; ls | grep '\.o$\|\.e$' | xargs rm
 
 # Clean out temporary surjected bam files
-#cd "${SAMPLE_NAME}_surjected_bams"; ls | grep '[0-9|Y|X].\(sorted.\|sorted.dupmarked.\|sorted.dupmarked.reordered.\)bam' | xargs rm
 cd "${SAMPLE_NAME}_surjected_bams"; ls | grep '_[a-z][a-z].\(\|sorted.\|sorted.dupmarked.\|sorted.dupmarked.reordered.\)bam' | xargs rm; ls | grep 'marked_dup_metrics' | xargs rm; rm ${SAMPLE_NAME}_merged.dupmarked.reordered.bam
+
+# Clean out raw read data and gam data
+cd ${WORK_DIR}; rm -r split_fastqs_${SAMPLE_NAME} ${SAMPLE_NAME}_output_gams ${SAMPLE_NAME}_reads
 

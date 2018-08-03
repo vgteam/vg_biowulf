@@ -46,11 +46,11 @@ if [ $# -lt 4 ] || [[ $@ != -* ]]; then
     exit 1
 fi
 
-PACKAGE_DIR="/data/Udpbinfo/usr/markellocj/vg_workaround_pipeline_pkg"
+PACKAGE_DIR="/data/markellocj/vg_workaround_pipeline_pkg_cleanup"
 
-VG_CONTAINER="quay.io/vgteam/vg:v1.6.0-187-ga5bc5549-t124-run"
+VG_CONTAINER="quay.io/vgteam/vg:v1.9.0-0-g3286e131-t206-run"
 ## Parse through arguments
-while getopts "i:g:w:c:h" OPTION; do
+while getopts "i:g:w:c:m:s:h" OPTION; do
     case $OPTION in
         i)
             COHORT_NAME=$OPTARG
@@ -63,6 +63,12 @@ while getopts "i:g:w:c:h" OPTION; do
         ;;
         c)
             VG_CONTAINER=$OPTARG
+        ;;
+        m)
+            MAP_ALGORITHM=$OPTARG
+        ;;
+        s)
+            READS_PER_CHUNK=$OPTARG
         ;;
         h)
             usage
@@ -81,28 +87,29 @@ COHORT_DATA_DIR="/data/Udpdata/Families/${COHORT_NAME}"
 COHORT_NAMES_LIST=($(ls $COHORT_DATA_DIR | grep 'UDP'))
 CAT_READS_SWARMFILE_PATH="${COHORT_WORK_DIR}/cat_reads_swarmfile_${COHORT_NAME}"
 
-mkdir ${COHORT_WORK_DIR}
+mkdir -p ${COHORT_WORK_DIR}
 
 echo "Cohort UDP Sample List: ${COHORT_NAMES_LIST[@]}"
-touch cat_reads_swarm_script
 
 for SAMPLE_NAME in ${COHORT_NAMES_LIST[@]}
 do
-    ## Make readfile directories
-    mkdir ${COHORT_WORK_DIR}/${SAMPLE_NAME}_reads
+    ## Make sample work directory and sample readfile directories
+    SAMPLE_WORK_DIR="${COHORT_WORK_DIR}/${SAMPLE_NAME}_workdir"
+    mkdir -p ${SAMPLE_WORK_DIR}
+    mkdir ${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads
 
     ## Concatenate reads and put them in the sample-specific readfile directory
     PAIR_1_READS=()
     PAIR_2_READS=()
-    LANE_NUMS=($(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | awk -F'_' '{print $2}' | sort | uniq | xargs))
+    LANE_NUMS=($(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | awk -F'-' '{print $2}'| awk -F'_' '{print $1"_"$2}' | sort | uniq | xargs))
     for LANE_NUM in ${LANE_NUMS[@]}
     do
-        PAIR_1_READS+=(${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | grep "_${LANE_NUM}_1")")
-        PAIR_2_READS+=(${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | grep "_${LANE_NUM}_2")")
+        PAIR_1_READS+=(${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | grep "${LANE_NUM}_1")")
+        PAIR_2_READS+=(${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | grep "${LANE_NUM}_2")")
     done
 
-    echo "cat ${PAIR_1_READS[@]} > ${COHORT_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_1.fq.gz" >> ${CAT_READS_SWARMFILE_PATH}
-    echo "cat ${PAIR_2_READS[@]} > ${COHORT_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_2.fq.gz" >> ${CAT_READS_SWARMFILE_PATH}
+    echo "cat ${PAIR_1_READS[@]} > ${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_1.fq.gz" >> ${CAT_READS_SWARMFILE_PATH}
+    echo "cat ${PAIR_2_READS[@]} > ${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_2.fq.gz" >> ${CAT_READS_SWARMFILE_PATH}
 done
 
 COLLECT_READS_JOBID=$(swarm -f ${CAT_READS_SWARMFILE_PATH} --time=4:00:00)
@@ -113,9 +120,10 @@ cd ${COHORT_WORK_DIR}
 ## STEP2: RUN MAPPING PIPELINE. Run the graph mapping pipeline per sample.
 for SAMPLE_NAME in ${COHORT_NAMES_LIST[@]}
 do
-    READ_FILE_1="${COHORT_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_1.fq.gz"
-    READ_FILE_2="${COHORT_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_2.fq.gz"
-    SAMPLE_MAP_RUN_JOBID=$(sbatch --time=12:00:00 --dependency=afterok:${COLLECT_READS_JOBID} ${PACKAGE_DIR}/sample_master_script.sh -i ${SAMPLE_NAME} -r ${READ_FILE_1} -r ${READ_FILE_2} -g ${GRAPH_FILES_DIR} -w ${COHORT_WORK_DIR} -c "quay.io/vgteam/vg:v1.6.0-187-ga5bc5549-t124-run")
+    SAMPLE_WORK_DIR="${COHORT_WORK_DIR}/${SAMPLE_NAME}_workdir"
+    READ_FILE_1="${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_1.fq.gz"
+    READ_FILE_2="${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_2.fq.gz"
+    SAMPLE_MAP_RUN_JOBID=$(sbatch --cpus-per-task=32 --mem=120g --time=4:00:00 --dependency=afterok:${COLLECT_READS_JOBID} ${PACKAGE_DIR}/sample_master_script.sh -i ${SAMPLE_NAME} -r ${READ_FILE_1} -r ${READ_FILE_2} -g ${GRAPH_FILES_DIR} -w ${SAMPLE_WORK_DIR} -c ${VG_CONTAINER} -m ${MAP_ALGORITHM} -s ${READS_PER_CHUNK} > ${SAMPLE_NAME}_master_script.stdout)
     echo "Running sample ${SAMPLE_NAME} through the graph alignment pipeline. Jobid:${SAMPLE_MAP_RUN_JOBID}"
 done
 

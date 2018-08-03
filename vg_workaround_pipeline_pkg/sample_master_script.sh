@@ -47,7 +47,7 @@ fi
 
 PACKAGE_DIR="/data/markellocj/vg_workaround_pipeline_pkg_cleanup"
 
-VG_CONTAINER="quay.io/vgteam/vg:v1.6.0-187-ga5bc5549-t124-run"
+VG_CONTAINER="quay.io/vgteam/vg:v1.9.0-0-g3286e131-t206-run"
 READS_PER_CHUNK=10000000
 
 ## Parse through arguments
@@ -102,7 +102,7 @@ if [ ! -d "${WORK_DIR}" ]; then
 fi
 
 echo "Splitting reads files into chunks of ${READS_PER_CHUNK} reads."
-${PACKAGE_DIR}/run_split_reads.sh ${INPUT_READ_FILE_1} ${INPUT_READ_FILE_2} ${SAMPLE_NAME} ${WORK_DIR} ${VG_CONTAINER} ${READS_PER_CHUNK}
+${PACKAGE_DIR}/generate_split_reads_swarm_script.sh ${INPUT_READ_FILE_1} ${INPUT_READ_FILE_2} ${SAMPLE_NAME} ${WORK_DIR} ${VG_CONTAINER} ${READS_PER_CHUNK}
 echo "Finished splitting reads."
 
 
@@ -116,22 +116,22 @@ if [ "$MAP_ALGORITHM" = "vg_mpmap" ]; then
     echo "Generated swarm scripts for vg mpmap alignment pipeline."
  
     ## STEP3: CHUNK ALIGNMENT and RUN SURJECTION.
-    CHUNK_ALIGNMENT_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 120 -t 32 --time 8:00:00 --maxrunning 15)
+    CHUNK_ALIGNMENT_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 120 -t 32 --time 6:00:00 --gres=lscratch:200 --maxrunning 10)
     echo "Running swarm VG mpmap graph alignment. Jobid:${CHUNK_ALIGNMENT_JOBID}"
 
-    SURJECT_GAMS_JOBID=$(swarm -f ${SURJECT_GAMS_SWARMFILE_NAME} --dependency=afterok:${CHUNK_ALIGNMENT_JOBID} -g 100 -t 32 --time 12:00:00)
+    SURJECT_GAMS_JOBID=$(swarm -f ${SURJECT_GAMS_SWARMFILE_NAME} --dependency=afterok:${CHUNK_ALIGNMENT_JOBID} -g 100 -t 32 --time 12:00:00 --gres=lscratch:200)
     echo "Running surject swarm script. Jobid:${SURJECT_GAMS_JOBID}"
 
 else
     ## STEP2: GENERATE SURJECT SWARM FILES. Generate swarm script to run vg map on each fastq chunk and process the final BAM files.
-    ${PACKAGE_DIR}/generate_vg_map_pipeline_swarm_scripts.sh ${SAMPLE_NAME} ${WORK_DIR} ${GRAPH_FILES_DIR} ${VG_CONTAINER} ${PACKAGE_DIR}
+    ${PACKAGE_DIR}/generate_vg_map_surject_swarm_scripts.sh ${SAMPLE_NAME} ${WORK_DIR} ${GRAPH_FILES_DIR} ${VG_CONTAINER} ${PACKAGE_DIR}
     MAP_SWARMFILE_NAME="${WORK_DIR}/map_swarmfile_${SAMPLE_NAME}"
     PROCESS_BAMS_SWARMFILE_NAME="${WORK_DIR}/process_bams_swarmfile_${SAMPLE_NAME}"
     echo "Generated swarm scripts for vg map alignment pipeline."
     
     ## STEP3: CHUNK ALIGNMENT WITH VG SURJECTION.
-    SURJECT_GAMS_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 100 -t 32 --time 8:00:00 --maxrunning 15)
-    echo "Running swarm VG map graph alignment. Jobid:${CHUNK_ALIGNMENT_JOBID}"
+    SURJECT_GAMS_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 100 -t 32 --time 8:00:00 --gres=lscratch:200 --maxrunning 15)
+    echo "Running swarm VG map graph alignment. Jobid:${SURJECT_GAMS_JOBID}"
 
 fi
     
