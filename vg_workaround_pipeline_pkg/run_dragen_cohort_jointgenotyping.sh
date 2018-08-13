@@ -48,9 +48,6 @@ for sample_name in ${COHORT_SAMPLE_NAMES[@]}
 do
     SAMPLE_DRAGEN_WORK_DIR="/staging/markellocj/${sample_name}"
     ssh -t markellocj@helix.nih.gov ssh udpdragen01.nhgri.nih.gov "rm -fr ${SAMPLE_DRAGEN_WORK_DIR}"
-done
-for sample_name in ${COHORT_SAMPLE_NAMES[@]}
-do
     rm -fr /data/${UDPBINFO_DIR}/${sample_name}_surjected_bams/
 done
 

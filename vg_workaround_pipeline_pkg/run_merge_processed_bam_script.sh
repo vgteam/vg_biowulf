@@ -15,4 +15,10 @@ time samtools sort -T ${SWARM_MAP_OUTPUT_DIR_NAME}/tmpSort --threads 32 ${SWARM_
 # Index the final merged and reordered BAM file
 time samtools index -@ ${PROCESS_BAM_CORES} ${SWARM_MAP_OUTPUT_DIR_PATH}/${SAMPLE_NAME}_merged.sorted.dupmarked.reordered.bam
 
+#TODO: Add bamqc calls here
+# 1) Add in PACKAGE_DIR parameter
+# 2) load singularity module
+# 3) BAMQC_WORK_DIR=${SWARM_MAP_OUTPUT_DIR_PATH}
+# 4) ${PACKAGE_DIR}/run_bamqc.sh ${SAMPLE_NAME} ${BAMQC_WORK_DIR}
+
 

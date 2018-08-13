@@ -111,16 +111,12 @@ if [ "$MAP_ALGORITHM" = "vg_mpmap" ]; then
     ## STEP2: GENERATE SURJECT SWARM FILES. Generate swarm script to run vg surject on each chunked GAM into final BAM files.
     ${PACKAGE_DIR}/generate_vg_mpmap_pipeline_swarm_scripts.sh ${SAMPLE_NAME} ${WORK_DIR} ${GRAPH_FILES_DIR} ${VG_CONTAINER} ${PACKAGE_DIR}
     MAP_SWARMFILE_NAME="${WORK_DIR}/map_swarmfile_${SAMPLE_NAME}"
-    SURJECT_GAMS_SWARMFILE_NAME="${WORK_DIR}/surject_gams_swarmfile_${SAMPLE_NAME}"    
     PROCESS_BAMS_SWARMFILE_NAME="${WORK_DIR}/process_bams_swarmfile_${SAMPLE_NAME}"   
     echo "Generated swarm scripts for vg mpmap alignment pipeline."
  
     ## STEP3: CHUNK ALIGNMENT and RUN SURJECTION.
-    CHUNK_ALIGNMENT_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 120 -t 32 --time 6:00:00 --gres=lscratch:200 --maxrunning 10)
+    CHUNK_ALIGNMENT_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 100 -t 32 --time 8:00:00 --gres=lscratch:200 --maxrunning 40)
     echo "Running swarm VG mpmap graph alignment. Jobid:${CHUNK_ALIGNMENT_JOBID}"
-
-    SURJECT_GAMS_JOBID=$(swarm -f ${SURJECT_GAMS_SWARMFILE_NAME} --dependency=afterok:${CHUNK_ALIGNMENT_JOBID} -g 100 -t 32 --time 12:00:00 --gres=lscratch:200)
-    echo "Running surject swarm script. Jobid:${SURJECT_GAMS_JOBID}"
 
 else
     ## STEP2: GENERATE SURJECT SWARM FILES. Generate swarm script to run vg map on each fastq chunk and process the final BAM files.
@@ -130,13 +126,13 @@ else
     echo "Generated swarm scripts for vg map alignment pipeline."
     
     ## STEP3: CHUNK ALIGNMENT WITH VG SURJECTION.
-    SURJECT_GAMS_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 100 -t 32 --time 8:00:00 --gres=lscratch:200 --maxrunning 15)
-    echo "Running swarm VG map graph alignment. Jobid:${SURJECT_GAMS_JOBID}"
+    CHUNK_ALIGNMENT_JOBID=$(swarm -f ${MAP_SWARMFILE_NAME} -g 100 -t 32 --time 8:00:00 --gres=lscratch:200 --maxrunning 40)
+    echo "Running swarm VG map graph alignment. Jobid:${CHUNK_ALIGNMENT_JOBID}"
 
 fi
     
 ## STEP4: SORT, MARKDUPLICATES and REORDER BAMs.
-PROCESS_BAMS_JOBID=$(swarm -f ${PROCESS_BAMS_SWARMFILE_NAME} --dependency=afterok:${SURJECT_GAMS_JOBID} -g 100 -t 32 --time 12:00:00 --maxrunning 20)
+PROCESS_BAMS_JOBID=$(swarm -f ${PROCESS_BAMS_SWARMFILE_NAME} --dependency=afterok:${CHUNK_ALIGNMENT_JOBID} -g 100 -t 32 --time 12:00:00 --maxrunning 40)
 echo "Running process BAMs swarm script. Jobid:${PROCESS_BAMS_JOBID}"
 
 ## STEP5: MERGE BAM FILES.

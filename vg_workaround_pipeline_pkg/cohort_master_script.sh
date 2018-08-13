@@ -84,7 +84,7 @@ done
 ## STEP1: COLLECT READS. Generate sample work directories and create read gathering swarm script
 COHORT_WORK_DIR="${COHORT_SET_WORK_DIR}/${COHORT_NAME}_run"
 COHORT_DATA_DIR="/data/Udpdata/Families/${COHORT_NAME}"
-COHORT_NAMES_LIST=($(ls $COHORT_DATA_DIR | grep 'UDP'))
+COHORT_NAMES_LIST=($(ls $COHORT_DATA_DIR/SnpChip/MostRecent | grep 'UDP' | awk -F'_' '{print $1}' | awk -F'.' '{print $1}' | uniq))
 CAT_READS_SWARMFILE_PATH="${COHORT_WORK_DIR}/cat_reads_swarmfile_${COHORT_NAME}"
 
 mkdir -p ${COHORT_WORK_DIR}
@@ -97,15 +97,16 @@ do
     SAMPLE_WORK_DIR="${COHORT_WORK_DIR}/${SAMPLE_NAME}_workdir"
     mkdir -p ${SAMPLE_WORK_DIR}
     mkdir ${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads
-
+    
     ## Concatenate reads and put them in the sample-specific readfile directory
+    INDIVIDUAL_DATA_DIR="/data/Udpdata/Individuals/${SAMPLE_NAME}"
     PAIR_1_READS=()
     PAIR_2_READS=()
-    LANE_NUMS=($(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | awk -F'-' '{print $2}'| awk -F'_' '{print $1"_"$2}' | sort | uniq | xargs))
+    LANE_NUMS=($(ls ${INDIVIDUAL_DATA_DIR}/WGS/Rawreads/HudsonAlpha_1 | awk -F'-' '{print $2}'| awk -F'_' '{print $1"_"$2}' | sort | uniq | xargs))
     for LANE_NUM in ${LANE_NUMS[@]}
     do
-        PAIR_1_READS+=(${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | grep "${LANE_NUM}_1")")
-        PAIR_2_READS+=(${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${COHORT_DATA_DIR}/${SAMPLE_NAME}/WGS/Rawreads/HudsonAlpha_1 | grep "${LANE_NUM}_2")")
+        PAIR_1_READS+=(${INDIVIDUAL_DATA_DIR}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${INDIVIDUAL_DATA_DIR}/WGS/Rawreads/HudsonAlpha_1 | grep "${LANE_NUM}_1")")
+        PAIR_2_READS+=(${INDIVIDUAL_DATA_DIR}/WGS/Rawreads/HudsonAlpha_1/"$(ls ${INDIVIDUAL_DATA_DIR}/WGS/Rawreads/HudsonAlpha_1 | grep "${LANE_NUM}_2")")
     done
 
     echo "cat ${PAIR_1_READS[@]} > ${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_1.fq.gz" >> ${CAT_READS_SWARMFILE_PATH}
@@ -123,7 +124,7 @@ do
     SAMPLE_WORK_DIR="${COHORT_WORK_DIR}/${SAMPLE_NAME}_workdir"
     READ_FILE_1="${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_1.fq.gz"
     READ_FILE_2="${SAMPLE_WORK_DIR}/${SAMPLE_NAME}_reads/${SAMPLE_NAME}_read_pair_2.fq.gz"
-    SAMPLE_MAP_RUN_JOBID=$(sbatch --cpus-per-task=32 --mem=120g --time=4:00:00 --dependency=afterok:${COLLECT_READS_JOBID} ${PACKAGE_DIR}/sample_master_script.sh -i ${SAMPLE_NAME} -r ${READ_FILE_1} -r ${READ_FILE_2} -g ${GRAPH_FILES_DIR} -w ${SAMPLE_WORK_DIR} -c ${VG_CONTAINER} -m ${MAP_ALGORITHM} -s ${READS_PER_CHUNK} > ${SAMPLE_NAME}_master_script.stdout)
+    SAMPLE_MAP_RUN_JOBID=$(sbatch --cpus-per-task=32 --mem=100g --time=4:00:00 --dependency=afterok:${COLLECT_READS_JOBID} ${PACKAGE_DIR}/sample_master_script.sh -i ${SAMPLE_NAME} -r ${READ_FILE_1} -r ${READ_FILE_2} -g ${GRAPH_FILES_DIR} -w ${SAMPLE_WORK_DIR} -c ${VG_CONTAINER} -m ${MAP_ALGORITHM} -s ${READS_PER_CHUNK} > ${SAMPLE_NAME}_master_script.stdout)
     echo "Running sample ${SAMPLE_NAME} through the graph alignment pipeline. Jobid:${SAMPLE_MAP_RUN_JOBID}"
 done
 

@@ -40,3 +40,5 @@ for pid in ${pids[*]}; do
     wait $pid
 done
 
+rm -f ${INPUT_READ_FILE_1} ${INPUT_READ_FILE_2}
+
